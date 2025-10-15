@@ -14,23 +14,26 @@ type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
 function HomeScreen({ navigation }: { navigation: any }) {
   useEffect(() => {
     if (Platform.OS === 'android') {
+      let backPressed = false; // ← переменная объявляется вне обработчика
+
       const onBackPress = () => {
-        ToastAndroid.show('Tap back again to exit', ToastAndroid.SHORT);
-        // simple double-back-to-exit behavior
-        let backPressed = false;
         if (backPressed) {
-          BackHandler.exitApp();
-        } else {
-          backPressed = true;
-          setTimeout(() => {
-            backPressed = false;
-          }, 1500);
+          BackHandler.exitApp(); // второе нажатие — выходим
+          return true;
         }
-        return true;
+
+        backPressed = true;
+        ToastAndroid.show('Tap back again to exit', ToastAndroid.SHORT);
+
+        // через 1.5 секунды сбрасываем состояние
+        setTimeout(() => {
+          backPressed = false;
+        }, 1500);
+
+        return true; // блокируем стандартное поведение
       };
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -64,6 +67,7 @@ function HomeScreen({ navigation }: { navigation: any }) {
   );
 }
 
+
 function PlaceholderScreen({ title }: { title: string }) {
   return (
     <View style={styles.container}>
@@ -75,6 +79,11 @@ function PlaceholderScreen({ title }: { title: string }) {
 function MediaScreen() {
   const videoRef = useRef<Video>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+useEffect(() => {
+  return () => {
+    sound?.unloadAsync();
+  };
+}, [sound]);
 
   useEffect(() => {
     return () => {

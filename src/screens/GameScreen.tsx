@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ToastAndroid, Platform, Vibration } from 'react-native';
+
+import { Image } from 'expo-image'; // ✅ вот этот импорт
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, ToastAndroid, Platform, Vibration} from 'react-native';
 import { evaluateGuess, LetterState, mergeKeyState } from '../utils/wordle';
 import { getRandomWord, VALID_SET } from '../data/words';
+import { Audio } from 'expo-av'; // 🟢 добавили для звуков
 
 const ROWS = 6;
 const COLS = 5;
@@ -15,16 +18,44 @@ const KEY_ROWS = [
 ];
 
 export default function GameScreen() {
-  const [secret, setSecret] = useState<string>(getRandomWord);
+const [secret, setSecret] = useState<string>(() => getRandomWord());
+
   const [rows, setRows] = useState<string[]>(Array(ROWS).fill(''));
-  const [evals, setEvals] = useState<LetterState[][]>(Array(ROWS).fill(Array(COLS).fill('empty')));
+const [evals, setEvals] = useState<LetterState[][]>(
+  Array.from({ length: ROWS }, () => Array(COLS).fill('empty'))
+);
+
   const [currentRow, setCurrentRow] = useState<number>(0);
   const [done, setDone] = useState<{win: boolean} | null>(null);
   const [keyStates, setKeyStates] = useState<KeyStateMap>({});
+  const [sound, setSound] = useState<Audio.Sound | null>(null); // 🟢
+useEffect(() => {
+  return () => {
+    sound?.unloadAsync();
+  };
+}, [sound]);
 
   useEffect(() => {
     setSecret(getRandomWord());
+    return () => {
+      sound?.unloadAsync();
+    };
   }, []);
+
+  const playSound = async (type: 'win' | 'lose') => { // 🟢 универсальная функция
+    try {
+      const file = type === 'win' ? require('../../assets/win.mp3') : require('../../assets/lose.mp3');
+      const { sound: s } = await Audio.Sound.createAsync(file);
+      setSound(s);
+      await s.playAsync();
+    } catch (err) {
+      console.warn('Sound error:', err);
+    }
+  };
+
+  const notify = (msg: string) => {
+    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
+  };
 
   const onKey = (k: string) => {
     if (done) return;
@@ -37,10 +68,6 @@ export default function GameScreen() {
       if (cur.length < COLS) next[currentRow] = cur + k;
       return next;
     });
-  };
-
-  const notify = (msg: string) => {
-    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
   };
 
   const onBackspace = () => {
@@ -81,12 +108,14 @@ export default function GameScreen() {
 
     if (res.every(s => s === 'correct')) {
       setDone({ win: true });
+      playSound('win'); // 🟢 звук победы
       notify('Победа!');
       return;
     }
 
     if (currentRow + 1 >= ROWS) {
       setDone({ win: false });
+      playSound('lose'); // 🟢 звук поражения
       notify(`Проигрыш. Слово: ${secret}`);
       return;
     }
@@ -159,10 +188,18 @@ export default function GameScreen() {
           ))}
         </View>
       ))}
+
+      {/* 🟢 При победе или поражении показываем иконку */}
       {done && (
-        <Pressable style={[styles.button, { marginTop: 16 }]} onPress={reset}>
-          <Text style={styles.buttonText}>Сыграть ещё</Text>
-        </Pressable>
+        <View style={{ alignItems: 'center', marginTop: 20 }}>
+          <Image
+            source={done.win ? require('../../assets/win.png') : require('../../assets/lose.png')}
+            style={{ width: 100, height: 100, marginBottom: 12 }}
+          />
+          <Pressable style={styles.button} onPress={reset}>
+            <Text style={styles.buttonText}>Сыграть ещё</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -230,5 +267,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-
