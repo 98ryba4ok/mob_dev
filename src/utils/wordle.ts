@@ -7,7 +7,6 @@ export function evaluateGuess(secret: string, guess: string): LetterState[] {
 
   const used: boolean[] = Array(secret.length).fill(false);
 
-  // First pass: correct positions
   for (let i = 0; i < guessChars.length; i++) {
     if (guessChars[i] === secretChars[i]) {
       result[i] = 'correct';
@@ -15,7 +14,6 @@ export function evaluateGuess(secret: string, guess: string): LetterState[] {
     }
   }
 
-  // Second pass: present but wrong place
   for (let i = 0; i < guessChars.length; i++) {
     if (result[i] === 'correct') continue;
     const ch = guessChars[i];
@@ -36,7 +34,6 @@ export function evaluateGuess(secret: string, guess: string): LetterState[] {
 }
 
 export function mergeKeyState(prev: LetterState | undefined, next: LetterState): LetterState {
-  // Precedence: correct > present > absent > empty
   const rank = (s?: LetterState) => ({ empty: 0, absent: 1, present: 2, correct: 3 }[s ?? 'empty']);
   if (rank(next) >= rank(prev)) return next;
   return prev ?? 'empty';
