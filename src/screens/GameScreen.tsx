@@ -1,4 +1,3 @@
-// src/screens/GameScreen.tsx
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
 import {
@@ -16,6 +15,8 @@ import { evaluateGuess, LetterState, mergeKeyState } from '../utils/wordle';
 import { getRandomWord, VALID_SET, CATEGORIES } from '../data/words';
 import { Audio } from 'expo-av';
 import { Picker } from '@react-native-picker/picker';
+import { gameService } from '../services/game';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const COLS = 5;
 
@@ -49,7 +50,14 @@ export default function GameScreen() {
   const [score, setScore] = useState(0);
   const [hintsUsed, setHintsUsed] = useState(0);
 
-  useEffect(() => () => sound?.unloadAsync(), [sound]);
+useEffect(() => {
+  return () => {
+    if (sound) {
+      sound.unloadAsync().catch(() => {});
+    }
+  };
+}, [sound]);
+
 
   useEffect(() => {
     reset();
@@ -141,6 +149,7 @@ export default function GameScreen() {
       setDone({ win: true });
       playSound('win');
       notify(`Победа! +${gained} очков`);
+      saveGameResult(true, currentRow + 1, gained);
       return;
     }
 
@@ -149,6 +158,7 @@ export default function GameScreen() {
       setDone({ win: false });
       playSound('lose');
       notify(`Проигрыш. Слово: ${secret}`);
+      saveGameResult(false, currentRow + 1, 0);
       return;
     }
 
@@ -177,6 +187,52 @@ export default function GameScreen() {
 
     // переходим на следующий ряд (это завершает текущую попытку)
     setCurrentRow(r => r + 1);
+  };
+
+  const saveGameResult = async (won: boolean, attempts: number, scoreGained: number) => {
+    try {
+      // Сохраняем в бекенд
+      await gameService.saveGameResult({
+        attempts,
+        won,
+        score: scoreGained,
+        word: secret,
+      });
+
+      // Обновляем локальную статистику
+      const statsJson = await AsyncStorage.getItem('statistics');
+      const stats = statsJson ? JSON.parse(statsJson) : {
+        gamesPlayed: 0,
+        gamesWon: 0,
+        currentStreak: 0,
+        bestStreak: 0,
+        totalScore: 0,
+        averageAttempts: 0,
+        distribution: {},
+      };
+
+      stats.gamesPlayed += 1;
+      if (won) {
+        stats.gamesWon += 1;
+        stats.currentStreak += 1;
+        stats.bestStreak = Math.max(stats.bestStreak, stats.currentStreak);
+        stats.totalScore += scoreGained;
+        stats.distribution[attempts] = (stats.distribution[attempts] || 0) + 1;
+        
+        // Пересчитываем среднее количество попыток для побед
+        const totalAttempts = Object.entries(stats.distribution).reduce(
+          (sum, [att, count]) => sum + Number(att) * (count as number),
+          0
+        );
+        stats.averageAttempts = totalAttempts / stats.gamesWon;
+      } else {
+        stats.currentStreak = 0;
+      }
+
+      await AsyncStorage.setItem('statistics', JSON.stringify(stats));
+    } catch (error) {
+      console.error('Error saving game result:', error);
+    }
   };
 
   const reset = () => {

@@ -1,174 +1,251 @@
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View, Pressable, Platform, BackHandler, ToastAndroid, Vibration } from 'react-native';
-import { useEffect, useRef, useState } from 'react';
-import { Image } from 'expo-image';
-import { Audio, Video, ResizeMode } from 'expo-av';
+import {
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+  Platform,
+  BackHandler,
+  ToastAndroid,
+} from 'react-native';
+import { useEffect, useState } from 'react';
+
 import GameScreen from './src/screens/GameScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
+import RulesScreen from './src/screens/RulesScreen';
+import ProgressScreen from './src/screens/ProgressScreen';
+import AuthScreen from './src/screens/AuthScreen';
+import { authService } from './src/services/auth';
 
 type RootStackParamList = {
+  Welcome: undefined;
+  Auth: undefined;
   Home: undefined;
   Game: undefined;
-  Media: undefined;
+  Settings: undefined;
+  Leaderboard: undefined;
+  Rules: undefined;
+  Progress: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-function HomeScreen({ navigation }: { navigation: any }) {
+
+// ================= HOME SCREEN =================
+
+function HomeScreen({ navigation, onLogout }: any) {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
   useEffect(() => {
     if (Platform.OS === 'android') {
-      let backPressed = false; // ← переменная объявляется вне обработчика
+      let backPressed = false;
 
       const onBackPress = () => {
         if (backPressed) {
-          BackHandler.exitApp(); // второе нажатие — выходим
+          BackHandler.exitApp();
           return true;
         }
 
         backPressed = true;
-        ToastAndroid.show('Tap back again to exit', ToastAndroid.SHORT);
+        ToastAndroid.show('Нажмите еще раз для выхода', ToastAndroid.SHORT);
 
-        // через 1.5 секунды сбрасываем состояние
         setTimeout(() => {
           backPressed = false;
         }, 1500);
 
-        return true; // блокируем стандартное поведение
+        return true;
       };
 
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      const sub = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onBackPress
+      );
       return () => sub.remove();
     }
   }, []);
 
-  const handleHaptic = () => {
-    if (Platform.OS === 'android') {
-      Vibration.vibrate(100);
-      ToastAndroid.show('Haptic feedback', ToastAndroid.SHORT);
-    }
+  const loadUser = async () => {
+    const currentUser = await authService.getCurrentUser();
+    setUser(currentUser);
+  };
+
+  const handleLogout = async () => {
+    await authService.logout();
+    onLogout();
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Wordle RN</Text>
-      <View style={styles.row}>
-        <Pressable style={styles.button} onPress={() => navigation.navigate('Game')}>
-          <Text style={styles.buttonText}>Play</Text>
+
+      {user && (
+        <Text style={styles.userInfo}>
+          Привет, {user.username}! Очки: {user.totalScore || 0}
+        </Text>
+      )}
+
+      <View style={styles.menu}>
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => navigation.navigate('Game')}
+        >
+          <Text style={styles.menuButtonText}>🎮 Играть</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={() => navigation.navigate('Media')}>
-          <Text style={styles.buttonText}>Media</Text>
+
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => navigation.navigate('Progress')}
+        >
+          <Text style={styles.menuButtonText}>📊 Статистика</Text>
         </Pressable>
+
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => navigation.navigate('Leaderboard')}
+        >
+          <Text style={styles.menuButtonText}>🏆 Рейтинг</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => navigation.navigate('Rules')}
+        >
+          <Text style={styles.menuButtonText}>📖 Правила</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.menuButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Text style={styles.menuButtonText}>⚙️ Настройки</Text>
+        </Pressable>
+
+        {user && (
+          <Pressable
+            style={[styles.menuButton, styles.logoutButton]}
+            onPress={handleLogout}
+          >
+            <Text style={styles.menuButtonText}>🚪 Выйти</Text>
+          </Pressable>
+        )}
       </View>
-      <Pressable style={[styles.button, { marginTop: 16 }]} onPress={handleHaptic}>
-        <Text style={styles.buttonText}>Android Haptic</Text>
-      </Pressable>
+
       <StatusBar style="auto" />
     </View>
   );
 }
 
-
-function PlaceholderScreen({ title }: { title: string }) {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-    </View>
-  );
-}
-
-function MediaScreen() {
-  const videoRef = useRef<Video>(null);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-useEffect(() => {
-  return () => {
-    sound?.unloadAsync();
-  };
-}, [sound]);
-
-  useEffect(() => {
-    return () => {
-      sound?.unloadAsync();
-      videoRef.current?.unloadAsync();
-    };
-  }, [sound]);
-
-  const playSound = async () => {
-    try {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound: s } = await Audio.Sound.createAsync(
-        require('./assets/po_planu.mp3')
-      );
-      setSound(s);
-      await s.setVolumeAsync(1.0);
-      await s.playAsync();
-    } catch (e: any) {
-      if (Platform.OS === 'android') {
-        ToastAndroid.show(`Audio error: ${e?.message ?? 'unknown'}`, ToastAndroid.LONG);
-      }
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Media</Text>
-      <Image
-        source={require('./assets/pig.jpeg')}
-        style={{ width: 240, height: 160, borderRadius: 12, marginBottom: 16 }}
-        contentFit="cover"
-        transition={200}
-      />
-      <Video
-        ref={videoRef}
-        source={require('./assets/video.mp4')}
-        style={{ width: 260, height: 160, backgroundColor: '#000', borderRadius: 12 }}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        isLooping
-      />
-      <Pressable style={[styles.button, { marginTop: 16 }]} onPress={playSound}>
-        <Text style={styles.buttonText}>Play Sound</Text>
-      </Pressable>
-    </View>
-  );
-}
+// ================= APP =================
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [showWelcome, setShowWelcome] = useState(true);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const authenticated = await authService.isAuthenticated();
+    setIsAuthenticated(authenticated);
+  };
+
+  const handleWelcomeFinish = () => {
+    setShowWelcome(false);
+  };
+
+  const handleAuthSuccess = () => {
+    setIsAuthenticated(true);
+    setShowWelcome(false);
+  };
+
+  if (isAuthenticated === null) {
+    return null;
+  }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Game" component={GameScreen} />
-        <Stack.Screen name="Media" component={MediaScreen} />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {showWelcome && !isAuthenticated ? (
+          <Stack.Screen name="Welcome">
+            {() => <WelcomeScreen onFinish={handleWelcomeFinish} />}
+          </Stack.Screen>
+        ) : !isAuthenticated ? (
+          <Stack.Screen name="Auth">
+            {() => <AuthScreen onAuthSuccess={handleAuthSuccess} />}
+          </Stack.Screen>
+        ) : (
+          <>
+            <Stack.Screen name="Home">
+              {(props) => (
+                <HomeScreen
+                  {...props}
+                  onLogout={() => {
+                    setIsAuthenticated(false);
+                    setShowWelcome(false);
+                  }}
+                />
+              )}
+            </Stack.Screen>
+
+            <Stack.Screen name="Game" component={GameScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+            <Stack.Screen name="Rules" component={RulesScreen} />
+            <Stack.Screen name="Progress" component={ProgressScreen} />
+          </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0d0d0d',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: '700',
-    marginBottom: 24,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  button: {
-    backgroundColor: '#0a7ea4',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
     color: '#fff',
+    marginBottom: 20,
+  },
+  userInfo: {
     fontSize: 16,
+    color: '#ccc',
+    marginBottom: 30,
+  },
+  menu: {
+    width: '100%',
+    maxWidth: 400,
+  },
+  menuButton: {
+    backgroundColor: '#0a84ff',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  logoutButton: {
+    backgroundColor: '#e74c3c',
+    marginTop: 20,
+  },
+  menuButtonText: {
+    color: '#fff',
+    fontSize: 18,
     fontWeight: '600',
   },
 });
