@@ -2,7 +2,7 @@
 // Для физических устройств замените localhost на IP вашего компьютера
 // Для Android эмулятора используйте 10.0.2.2 вместо localhost
 export const API_BASE_URL = __DEV__
-  ? 'http://192.168.1.72:3000/api'
+  ? 'http://192.168.1.76:3000/api'
   : 'http://localhost:3000/api';
 
 

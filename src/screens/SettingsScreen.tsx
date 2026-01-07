@@ -8,9 +8,11 @@ import {
   ScrollView,
   Platform,
   ToastAndroid,
+  ActivityIndicator,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { gameService } from '../services/game';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -30,6 +32,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     difficulty: 'MEDIUM',
     notificationsEnabled: false,
   });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -61,6 +64,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const updateSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     const newSettings = { ...settings, [key]: value };
     saveSettings(newSettings);
+  };
+
+  const syncResults = async () => {
+    setIsSyncing(true);
+    try {
+      // Загружаем статистику с сервера
+      const progress = await gameService.getProgress();
+
+      // Обновляем локальное хранилище
+      const stats = {
+        gamesPlayed: progress.gamesPlayed,
+        gamesWon: progress.gamesWon,
+        currentStreak: progress.currentStreak,
+        bestStreak: progress.bestStreak,
+        totalScore: progress.totalScore,
+        averageAttempts: progress.averageAttempts,
+        distribution: progress.distribution,
+      };
+
+      await AsyncStorage.setItem('statistics', JSON.stringify(stats));
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Результаты синхронизированы', ToastAndroid.SHORT);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Ошибка синхронизации', ToastAndroid.SHORT);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -121,6 +156,24 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Данные</Text>
+          <Pressable
+            style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
+            onPress={syncResults}
+            disabled={isSyncing}
+          >
+            {isSyncing ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.syncButtonText}>🔄 Синхронизировать результаты с сервером</Text>
+            )}
+          </Pressable>
+          <Text style={styles.syncHint}>
+            Загрузить актуальную статистику с сервера
+          </Text>
+        </View>
+
         <Pressable
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -172,6 +225,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     backgroundColor: '#1a1a1a',
     borderRadius: 10,
+  },
+  syncButton: {
+    backgroundColor: '#27ae60',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  syncButtonDisabled: {
+    backgroundColor: '#555',
+  },
+  syncButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  syncHint: {
+    color: '#888',
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
   },
   backButton: {
     backgroundColor: '#0a84ff',

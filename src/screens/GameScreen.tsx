@@ -49,21 +49,47 @@ export default function GameScreen() {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [score, setScore] = useState(0);
   const [hintsUsed, setHintsUsed] = useState(0);
-
-useEffect(() => {
-  return () => {
-    if (sound) {
-      sound.unloadAsync().catch(() => {});
-    }
-  };
-}, [sound]);
-
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    reset();
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync().catch(() => {});
+      }
+    };
+  }, [sound]);
+
+  useEffect(() => {
+    // Пропускаем reset() при первой загрузке, чтобы избежать конфликта с loadSettings
+    if (isInitialized) {
+      reset();
+    }
   }, [category, difficulty]);
 
+  const loadSettings = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('settings');
+      if (saved) {
+        const settings = JSON.parse(saved);
+        setSoundEnabled(settings.soundEnabled ?? true);
+        // Не применяем сложность по умолчанию, чтобы избежать конфликта
+        // Пользователь может выбрать её вручную в пикере
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    } finally {
+      setIsInitialized(true);
+    }
+  };
+
   const playSound = async (type: 'win' | 'lose') => {
+    if (!soundEnabled) return;
+
     try {
       const file = type === 'win' ? require('../../assets/win.mp3') : require('../../assets/lose.mp3');
       const { sound: s } = await Audio.Sound.createAsync(file);
